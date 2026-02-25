@@ -3,6 +3,7 @@ const DB_NAME = "car-record-book-db";
 const DB_STORE = "records";
 const SYNC_UPDATED_AT_KEY = "car-sync-updated-at";
 const SYNC_REV_KEY = "car-sync-rev";
+const SYNC_DIRTY_KEY = "car-sync-dirty";
 
 const HARDCODED_SYNC_URL = "https://carrecordbook-default-rtdb.firebaseio.com";
 const HARDCODED_SYNC_ID = "car";
@@ -90,6 +91,14 @@ function getLocalSyncRev() {
 function setLocalSyncRev(value) {
   const rev = Number(value);
   localStorage.setItem(SYNC_REV_KEY, String(Number.isFinite(rev) && rev >= 0 ? rev : 0));
+}
+
+function isLocalSyncDirty() {
+  return localStorage.getItem(SYNC_DIRTY_KEY) === "1";
+}
+
+function setLocalSyncDirty(dirty) {
+  localStorage.setItem(SYNC_DIRTY_KEY, dirty ? "1" : "0");
 }
 
 function normalizeSyncUrl(url) {
@@ -197,6 +206,7 @@ function saveRecords(options = {}) {
   if (markChanged) {
     setLocalSyncUpdatedAt(nowIso());
     setLocalSyncRev(getLocalSyncRev() + 1);
+    setLocalSyncDirty(true);
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
   writeRecordsToIndexedDB(records).catch((error) => {
@@ -528,6 +538,7 @@ async function pushRemoteSyncData() {
     const body = await response.text();
     throw new Error(`동기화 쓰기 실패 (${response.status}): ${body.slice(0, 180)}`);
   }
+  setLocalSyncDirty(false);
 }
 
 async function syncNow(options = {}) {
@@ -564,6 +575,7 @@ async function syncNow(options = {}) {
       saveRecords();
       setLocalSyncUpdatedAt(remoteLatest || nowIso());
       setLocalSyncRev(remoteRev);
+      setLocalSyncDirty(false);
       updateStats();
       renderRecords();
       if (showResult) {
@@ -595,7 +607,12 @@ function startPullPolling() {
   if (!isSyncConfigured() || pullPollingTimer !== null) return;
   pullPollingTimer = window.setInterval(() => {
     if (document.hidden) return;
-    syncNow({ showProgress: false, showResult: false, pullOnly: true }).catch((error) => {
+    syncNow({
+      showProgress: false,
+      showResult: false,
+      pullOnly: !isLocalSyncDirty(),
+      preferRemote: !isLocalSyncDirty(),
+    }).catch((error) => {
       console.error(error);
     });
   }, 15000);
@@ -757,7 +774,12 @@ async function initializeApp() {
   await requestPersistentStorage();
 
   if (isSyncConfigured()) {
-    await syncNow({ showProgress: false, showResult: false });
+    await syncNow({
+      showProgress: false,
+      showResult: false,
+      pullOnly: !isLocalSyncDirty(),
+      preferRemote: !isLocalSyncDirty(),
+    });
     startPullPolling();
   } else {
     setSyncStatus("동기화 설정이 올바르지 않습니다.");
@@ -780,7 +802,12 @@ if ("serviceWorker" in navigator) {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) return;
   if (!isSyncConfigured()) return;
-  syncNow({ showProgress: false, showResult: false, pullOnly: true }).catch((error) => {
+  syncNow({
+    showProgress: false,
+    showResult: false,
+    pullOnly: !isLocalSyncDirty(),
+    preferRemote: !isLocalSyncDirty(),
+  }).catch((error) => {
     console.error(error);
   });
 });
