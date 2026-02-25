@@ -2,6 +2,7 @@ const STORAGE_KEY = "car-records-v1";
 const DB_NAME = "car-record-book-db";
 const DB_STORE = "records";
 const SYNC_UPDATED_AT_KEY = "car-sync-updated-at";
+const SYNC_REV_KEY = "car-sync-rev";
 
 const HARDCODED_SYNC_URL = "https://carrecordbook-default-rtdb.firebaseio.com";
 const HARDCODED_SYNC_ID = "car";
@@ -78,6 +79,17 @@ function getLocalSyncUpdatedAt() {
 
 function setLocalSyncUpdatedAt(value) {
   localStorage.setItem(SYNC_UPDATED_AT_KEY, value);
+}
+
+function getLocalSyncRev() {
+  const raw = localStorage.getItem(SYNC_REV_KEY);
+  const rev = Number(raw);
+  return Number.isFinite(rev) && rev >= 0 ? rev : 0;
+}
+
+function setLocalSyncRev(value) {
+  const rev = Number(value);
+  localStorage.setItem(SYNC_REV_KEY, String(Number.isFinite(rev) && rev >= 0 ? rev : 0));
 }
 
 function normalizeSyncUrl(url) {
@@ -184,6 +196,7 @@ function saveRecords(options = {}) {
   const { markChanged = false } = options;
   if (markChanged) {
     setLocalSyncUpdatedAt(nowIso());
+    setLocalSyncRev(getLocalSyncRev() + 1);
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
   writeRecordsToIndexedDB(records).catch((error) => {
@@ -500,9 +513,11 @@ async function fetchRemoteSyncData() {
 
 async function pushRemoteSyncData() {
   const localUpdatedAt = getLocalSyncUpdatedAt();
+  const localRev = getLocalSyncRev();
   const payload = {
     records,
     updatedAt: localUpdatedAt,
+    rev: localRev,
   };
   const response = await fetch(getRemotePath(), {
     method: "PUT",
@@ -533,9 +548,11 @@ async function syncNow(options = {}) {
 
     const localLatest = getLocalSyncUpdatedAt();
     const remoteLatest = remote && remote.updatedAt ? remote.updatedAt : getLatestRecordTime(remoteRecords);
+    const localRev = getLocalSyncRev();
+    const remoteRev = Number(remote && remote.rev ? remote.rev : 0);
 
     const shouldApplyRemote =
-      remoteRecords.length > 0 && (preferRemote || remoteLatest > localLatest);
+      remoteRecords.length > 0 && (preferRemote || remoteRev > localRev || (remoteRev === localRev && remoteLatest > localLatest));
 
     if (shouldApplyRemote) {
       if (isFormBeingEdited()) {
@@ -546,6 +563,7 @@ async function syncNow(options = {}) {
       records = remoteRecords;
       saveRecords();
       setLocalSyncUpdatedAt(remoteLatest || nowIso());
+      setLocalSyncRev(remoteRev);
       updateStats();
       renderRecords();
       if (showResult) {
