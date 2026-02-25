@@ -863,10 +863,11 @@ function startPullPolling() {
 }
 
 function exportBackup() {
+  const activeRecords = records.filter((item) => !item.deletedAt);
   const payload = {
     version: 1,
     exportedAt: nowIso(),
-    records,
+    records: activeRecords,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -875,7 +876,7 @@ function exportBackup() {
   anchor.download = `car-record-backup-${getLocalDateString()}.json`;
   anchor.click();
   URL.revokeObjectURL(url);
-  setStorageStatus("백업 파일을 내보냈습니다.");
+  setStorageStatus(`백업 파일을 내보냈습니다. (${activeRecords.length}건)`);
 }
 
 async function importBackupFromFile(file) {
@@ -896,7 +897,8 @@ async function importBackupFromFile(file) {
     updateStats();
     renderRecords();
     stopEdit();
-    setStorageStatus(`백업 복원 완료: ${records.length}건`);
+    const activeCount = records.filter((item) => !item.deletedAt).length;
+    setStorageStatus(`백업 복원 완료: ${activeCount}건`);
 
     if (isSyncConfigured()) {
       await syncNow({ showProgress: true, showResult: true, forcePush: true });
