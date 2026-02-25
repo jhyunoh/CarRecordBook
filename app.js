@@ -593,6 +593,7 @@ form.addEventListener("submit", (event) => {
   const fuelVolume = fuelVolumeRaw ? Number(fuelVolumeRaw) : null;
   const date = dateInput.value;
   const isNewRecord = !editingRecordId;
+  const isEditRecord = Boolean(editingRecordId);
 
   if (
     !date ||
@@ -638,10 +639,10 @@ form.addEventListener("submit", (event) => {
   renderRecords();
   stopEdit();
 
-  if (isNewRecord && isSyncConfigured()) {
+  if ((isNewRecord || isEditRecord) && isSyncConfigured()) {
     syncNow({ showProgress: false, showResult: true }).catch((error) => {
       console.error(error);
-      setSyncStatus("신규 입력 동기화 실패");
+      setSyncStatus(isNewRecord ? "신규 입력 동기화 실패" : "수정 동기화 실패");
     });
   }
 });
@@ -660,6 +661,13 @@ recordListEl.addEventListener("click", (event) => {
   saveRecords();
   updateStats();
   renderRecords();
+
+  if (isSyncConfigured()) {
+    syncNow({ showProgress: false, showResult: true }).catch((error) => {
+      console.error(error);
+      setSyncStatus("삭제 동기화 실패");
+    });
+  }
 });
 
 monthFilterInput.addEventListener("change", updateStats);
@@ -690,7 +698,11 @@ async function initializeApp() {
 
   await requestPersistentStorage();
 
-  if (!isSyncConfigured()) setSyncStatus("동기화 설정이 올바르지 않습니다.");
+  if (isSyncConfigured()) {
+    await syncNow({ showProgress: false, showResult: false });
+  } else {
+    setSyncStatus("동기화 설정이 올바르지 않습니다.");
+  }
 }
 
 initializeApp().catch((error) => {
