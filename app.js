@@ -6,6 +6,7 @@ const SYNC_REV_KEY = "car-sync-rev";
 const SYNC_DIRTY_KEY = "car-sync-dirty";
 const SYNC_LAST_SUCCESS_AT_KEY = "car-sync-last-success-at";
 const TOMBSTONE_RETENTION_DAYS = 30;
+const MIN_SAFE_SYNC_ID_LENGTH = 8;
 
 const HARDCODED_SYNC_URL = "https://carrecordbook-default-rtdb.firebaseio.com";
 const HARDCODED_SYNC_ID = "car";
@@ -53,6 +54,7 @@ let editingRecordId = null;
 let lastSyncStatusMessage = "";
 let pullPollingTimer = null;
 let syncInFlight = null;
+let hasWarnedWeakSyncId = false;
 
 function createId() {
   if (window.crypto && typeof window.crypto.randomUUID === "function") {
@@ -147,7 +149,13 @@ function getSyncConfig() {
 
 function isSyncConfigured() {
   const cfg = getSyncConfig();
-  return Boolean(cfg.url && cfg.syncId);
+  if (!cfg.url || !cfg.syncId) return false;
+  if (!cfg.url.startsWith("https://")) return false;
+  if (cfg.syncId.length < MIN_SAFE_SYNC_ID_LENGTH && !hasWarnedWeakSyncId) {
+    hasWarnedWeakSyncId = true;
+    console.warn("동기화 ID가 짧습니다. 추측이 어려운 8자 이상 ID를 권장합니다.");
+  }
+  return true;
 }
 
 function getRemotePath() {
@@ -562,8 +570,20 @@ function stopEdit() {
 }
 
 function isFormBeingEdited() {
+  const isFocusedInForm =
+    form instanceof HTMLFormElement &&
+    document.activeElement instanceof HTMLElement &&
+    form.contains(document.activeElement);
+  const defaultDate = getLocalDateString();
+  const defaultCategory = "fuel";
+  const dateDirty = Boolean(dateInput && dateInput.value && dateInput.value !== defaultDate);
+  const categoryDirty = Boolean(categoryInput && categoryInput.value && categoryInput.value !== defaultCategory);
+
   return Boolean(
     editingRecordId ||
+      isFocusedInForm ||
+      dateDirty ||
+      categoryDirty ||
       (amountInput && amountInput.value) ||
       (fuelVolumeInput && fuelVolumeInput.value) ||
       (mileageInput && mileageInput.value) ||
@@ -816,6 +836,10 @@ async function importBackupFromFile(file) {
     renderRecords();
     stopEdit();
     setStorageStatus(`백업 복원 완료: ${records.length}건`);
+
+    if (isSyncConfigured()) {
+      await syncNow({ showProgress: true, showResult: true });
+    }
   } catch (error) {
     console.error("Failed to import backup:", error);
     setStorageStatus("백업 복원에 실패했습니다.");
@@ -886,7 +910,9 @@ form.addEventListener("submit", (event) => {
 });
 
 recordListEl.addEventListener("click", (event) => {
-  const target = event.target;
+  const rawTarget = event.target;
+  if (!(rawTarget instanceof Element)) return;
+  const target = rawTarget.closest("button[data-id]");
   if (!(target instanceof HTMLButtonElement) || !target.dataset.id) return;
 
   if (target.classList.contains("edit")) {
