@@ -4,6 +4,7 @@ const DB_STORE = "records";
 const SYNC_UPDATED_AT_KEY = "car-sync-updated-at";
 const SYNC_REV_KEY = "car-sync-rev";
 const SYNC_DIRTY_KEY = "car-sync-dirty";
+const SYNC_LAST_SUCCESS_AT_KEY = "car-sync-last-success-at";
 
 const HARDCODED_SYNC_URL = "https://carrecordbook-default-rtdb.firebaseio.com";
 const HARDCODED_SYNC_ID = "car";
@@ -35,6 +36,8 @@ const importBackupFileInput = document.getElementById("import-backup-file");
 const storageStatusEl = document.getElementById("storage-status");
 
 const syncStatusEl = document.getElementById("sync-status");
+const syncRetryButton = document.getElementById("sync-retry-button");
+const syncLastAtEl = document.getElementById("sync-last-at");
 
 const totalAmountEl = document.getElementById("total-amount");
 const monthAmountEl = document.getElementById("month-amount");
@@ -70,6 +73,34 @@ function setSyncStatus(message) {
   if (message === lastSyncStatusMessage) return;
   lastSyncStatusMessage = message;
   syncStatusEl.textContent = message;
+  if (syncRetryButton) {
+    syncRetryButton.hidden = !message.includes("실패");
+  }
+}
+
+function formatSyncTime(isoString) {
+  if (!isoString) return "";
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("ko-KR", {
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function updateSyncLastAtDisplay() {
+  if (!syncLastAtEl) return;
+  const raw = localStorage.getItem(SYNC_LAST_SUCCESS_AT_KEY);
+  const formatted = formatSyncTime(raw);
+  syncLastAtEl.textContent = formatted ? `마지막 동기화: ${formatted}` : "마지막 동기화: 없음";
+}
+
+function markSyncSuccess(timestamp) {
+  localStorage.setItem(SYNC_LAST_SUCCESS_AT_KEY, timestamp);
+  updateSyncLastAtDisplay();
 }
 
 function getLocalSyncUpdatedAt() {
@@ -542,7 +573,7 @@ async function pushRemoteSyncData() {
 }
 
 async function syncNow(options = {}) {
-  const { showProgress = true, showResult = true, preferRemote = false, pullOnly = false } = options;
+  const { showProgress = true, showResult = true, pullOnly = false } = options;
 
   if (!isSyncConfigured()) {
     setSyncStatus("동기화 설정(Firebase DB URL, 동기화 ID)을 먼저 저장하세요.");
@@ -563,7 +594,7 @@ async function syncNow(options = {}) {
     const remoteRev = Number(remote && remote.rev ? remote.rev : 0);
 
     const shouldApplyRemote =
-      remoteRecords.length > 0 && (preferRemote || remoteRev > localRev || (remoteRev === localRev && remoteLatest > localLatest));
+      remoteRev > localRev || (remoteRev === localRev && remoteLatest > localLatest);
 
     if (shouldApplyRemote) {
       if (isFormBeingEdited()) {
@@ -576,6 +607,7 @@ async function syncNow(options = {}) {
       setLocalSyncUpdatedAt(remoteLatest || nowIso());
       setLocalSyncRev(remoteRev);
       setLocalSyncDirty(false);
+      markSyncSuccess(remoteLatest || nowIso());
       updateStats();
       renderRecords();
       if (showResult) {
@@ -586,6 +618,7 @@ async function syncNow(options = {}) {
 
     if (!pullOnly) {
       await pushRemoteSyncData();
+      markSyncSuccess(nowIso());
       if (showResult) {
         setSyncStatus("로컬 최신 데이터가 클라우드에 업로드되었습니다.");
       }
@@ -611,7 +644,6 @@ function startPullPolling() {
       showProgress: false,
       showResult: false,
       pullOnly: !isLocalSyncDirty(),
-      preferRemote: !isLocalSyncDirty(),
     }).catch((error) => {
       console.error(error);
     });
@@ -762,10 +794,20 @@ if (importBackupButton && importBackupFileInput) {
   });
 }
 
+if (syncRetryButton) {
+  syncRetryButton.addEventListener("click", () => {
+    syncNow({ showProgress: true, showResult: true }).catch((error) => {
+      console.error(error);
+      setSyncStatus("동기화 실패");
+    });
+  });
+}
+
 async function initializeApp() {
   monthFilterInput.value = getCurrentMonth();
   resetForm();
   updatePricePerGallonPreview();
+  updateSyncLastAtDisplay();
 
   records = (await loadRecords()).map(normalizeRecord);
   updateStats();
@@ -778,7 +820,6 @@ async function initializeApp() {
       showProgress: false,
       showResult: false,
       pullOnly: !isLocalSyncDirty(),
-      preferRemote: !isLocalSyncDirty(),
     });
     startPullPolling();
   } else {
@@ -806,7 +847,6 @@ document.addEventListener("visibilitychange", () => {
     showProgress: false,
     showResult: false,
     pullOnly: !isLocalSyncDirty(),
-    preferRemote: !isLocalSyncDirty(),
   }).catch((error) => {
     console.error(error);
   });
