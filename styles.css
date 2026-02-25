@@ -20,19 +20,21 @@ body {
 }
 
 .container {
-  width: min(960px, 94vw);
-  margin: 32px auto;
+  width: min(1100px, 94vw);
+  margin: 28px auto;
   display: grid;
   gap: 16px;
 }
 
 .hero h1 {
   margin: 0 0 8px;
+  font-size: clamp(1.8rem, 3.2vw, 2.4rem);
 }
 
 .hero p {
   margin: 0;
   color: var(--subtle);
+  font-size: clamp(0.95rem, 1.8vw, 1.25rem);
 }
 
 .card {
@@ -44,7 +46,7 @@ body {
 
 h2 {
   margin: 0 0 12px;
-  font-size: 1.1rem;
+  font-size: 1.2rem;
 }
 
 .form-grid {
@@ -56,7 +58,7 @@ h2 {
 label {
   display: grid;
   gap: 6px;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
 }
 
 label.full {
@@ -66,6 +68,7 @@ label.full {
 input,
 select,
 button {
+  width: 100%;
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 10px 12px;
@@ -96,6 +99,13 @@ button.secondary {
   font-weight: 700;
 }
 
+button.danger {
+  color: var(--danger);
+  background: #fee2e2;
+  border-color: #fecaca;
+  padding: 6px 10px;
+}
+
 .row-between {
   display: flex;
   align-items: center;
@@ -109,6 +119,10 @@ button.secondary {
   gap: 8px;
 }
 
+.month-filter input {
+  width: auto;
+}
+
 .storage-tools {
   margin: 10px 0 12px;
   display: flex;
@@ -117,28 +131,21 @@ button.secondary {
   flex-wrap: wrap;
 }
 
+#sync-status {
+  color: var(--subtle);
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+
 .backup-actions {
   margin-left: auto;
   display: flex;
   gap: 8px;
 }
 
-.sync-tools {
-  margin: 8px 0 12px;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
-  align-items: center;
-}
-
-.sync-tools button {
-  white-space: nowrap;
-}
-
-#sync-status {
-  color: var(--subtle);
-  font-size: 0.86rem;
-  white-space: nowrap;
+.backup-actions button,
+#sync-now-button {
+  width: auto;
 }
 
 .stats {
@@ -162,7 +169,8 @@ button.secondary {
 }
 
 .table-wrap {
-  overflow: auto;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -220,13 +228,6 @@ td {
   text-overflow: ellipsis;
 }
 
-button.danger {
-  color: var(--danger);
-  background: #fee2e2;
-  border-color: #fecaca;
-  padding: 6px 10px;
-}
-
 #empty-state {
   color: var(--subtle);
   margin: 12px 0 0;
@@ -252,20 +253,23 @@ button.danger {
   margin: 10px 0 0;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .container {
     width: min(100%, 96vw);
-    margin: 12px auto 20px;
-    gap: 12px;
+    margin: 16px auto 20px;
   }
 
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
   .card {
     padding: 14px;
-    border-radius: 12px;
   }
 
-  .hero h1,
-  .hero p,
+  .hero,
   h2 {
     text-align: center;
   }
@@ -284,18 +288,28 @@ button.danger {
   }
 
   .month-filter {
-    width: 100%;
     justify-content: space-between;
   }
 
   .month-filter input {
-    min-width: 0;
-    width: 60%;
+    width: min(220px, 58vw);
   }
 
   .storage-tools {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .backup-actions {
+    margin-left: 0;
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  #sync-now-button {
+    width: 100%;
   }
 
   #sync-status {
@@ -307,74 +321,34 @@ button.danger {
     grid-template-columns: 1fr;
   }
 
-  .backup-actions {
-    margin-left: 0;
+  table {
+    min-width: 860px;
+  }
+
+  #efficiency-chart {
+    min-width: 620px;
+    height: 240px;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
     width: 100%;
-    justify-content: stretch;
-  }
-
-  .backup-actions button,
-  #sync-now-button {
-    width: 100%;
-  }
-
-  .table-wrap {
-    overflow: visible;
-  }
-
-  table.record-table {
-    min-width: 0;
-    width: 100%;
-    table-layout: auto;
-    border-collapse: separate;
-    border-spacing: 0;
-  }
-
-  .record-table colgroup,
-  .record-table thead {
-    display: none;
-  }
-
-  .record-table tbody {
-    display: grid;
+    margin: 8px 0 16px;
+    padding: 0 10px;
     gap: 10px;
   }
 
-  .record-table tr {
-    display: grid;
-    gap: 6px;
-    padding: 10px;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    background: #fff;
+  .card {
+    border-radius: 12px;
+    padding: 12px;
   }
 
-  .record-table td {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border: 0;
-    padding: 2px 0;
-    text-align: right;
-    white-space: normal;
+  .backup-actions {
+    grid-template-columns: 1fr;
   }
 
-  .record-table td::before {
-    content: attr(data-label);
-    color: var(--subtle);
-    font-size: 0.82rem;
-    margin-right: 12px;
-    text-align: left;
-    flex: 0 0 auto;
-  }
-
-  .record-table td:last-child,
-  .record-table td:nth-last-child(2) {
-    justify-content: flex-end;
-  }
-
-  .record-table td:last-child::before,
-  .record-table td:nth-last-child(2)::before {
-    margin-right: 8px;
+  table {
+    min-width: 820px;
   }
 }
