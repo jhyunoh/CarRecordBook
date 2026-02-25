@@ -382,16 +382,17 @@ function renderRecords() {
   recordListEl.innerHTML = "";
   for (const item of ordered) {
     const row = document.createElement("tr");
+    row.className = "transition-colors hover:bg-slate-50";
     row.innerHTML = `
-      <td data-label="날짜">${item.date}</td>
-      <td data-label="항목">${CATEGORY_LABELS[item.category] || item.category}</td>
-      <td data-label="금액">${formatCurrency(item.amount)}</td>
-      <td data-label="주유량">${item.fuelVolume ? `${formatNumber(item.fuelVolume)} 갤런` : "-"}</td>
-      <td data-label="갤런당 가격">${item.fuelVolume && item.fuelVolume > 0 ? formatCurrency(item.amount / item.fuelVolume) : "-"}</td>
-      <td data-label="주행거리">${item.mileage ? `${item.mileage.toLocaleString("en-US")} 마일` : "-"}</td>
-      <td data-label="메모">${item.memo || "-"}</td>
-      <td data-label="수정"><button class="secondary edit" data-id="${item.id}" type="button">수정</button></td>
-      <td data-label="삭제"><button class="danger" data-id="${item.id}" type="button">삭제</button></td>
+      <td class="px-3 py-3 text-center text-[15px] font-semibold text-slate-800 tabular-nums">${item.date}</td>
+      <td class="px-3 py-3 text-center text-[15px] font-semibold text-slate-800">${CATEGORY_LABELS[item.category] || item.category}</td>
+      <td class="px-3 py-3 text-center text-[15px] font-bold text-slate-900 tabular-nums">${formatCurrency(item.amount)}</td>
+      <td class="px-3 py-3 text-center text-[15px] text-slate-800 tabular-nums">${item.fuelVolume ? `${formatNumber(item.fuelVolume)} 갤런` : "-"}</td>
+      <td class="px-3 py-3 text-center text-[15px] text-slate-800 tabular-nums">${item.fuelVolume && item.fuelVolume > 0 ? formatCurrency(item.amount / item.fuelVolume) : "-"}</td>
+      <td class="px-3 py-3 text-center text-[15px] text-slate-800 tabular-nums">${item.mileage ? `${item.mileage.toLocaleString("en-US")} 마일` : "-"}</td>
+      <td class="px-3 py-3 text-center text-[14px] text-slate-500">${item.memo || "-"}</td>
+      <td class="px-3 py-3 text-center"><button class="edit inline-flex h-10 min-w-[72px] items-center justify-center whitespace-nowrap rounded-lg border border-slate-300 bg-slate-100 px-4 text-sm font-bold text-slate-700 hover:bg-slate-200" data-id="${item.id}" type="button">수정</button></td>
+      <td class="px-3 py-3 text-center"><button class="inline-flex h-10 min-w-[72px] items-center justify-center whitespace-nowrap rounded-lg border border-rose-200 bg-rose-100 px-4 text-sm font-bold text-rose-700 hover:bg-rose-200" data-id="${item.id}" type="button">삭제</button></td>
     `;
     recordListEl.appendChild(row);
   }

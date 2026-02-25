@@ -6,26 +6,26 @@
   <meta name="theme-color" content="#16324f" />
   <link rel="manifest" href="./manifest.json" />
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-  <link rel="stylesheet" href="./styles.css?v=4" />
+  <script src="https://cdn.tailwindcss.com"></script>
   <title>차계부</title>
 </head>
-<body>
-  <main class="container">
-    <header class="hero">
-      <h1>차계부</h1>
-      <p>유류비, 통행료, 정비비를 기록하고 월별 합계를 확인하세요.</p>
+<body class="bg-slate-100 text-slate-900">
+  <main class="mx-auto w-full max-w-6xl space-y-4 p-3 md:p-6">
+    <header class="rounded-2xl border border-slate-200 bg-white p-5">
+      <h1 class="text-3xl font-extrabold tracking-tight md:text-4xl">차계부</h1>
+      <p class="mt-2 text-slate-600">유류비, 통행료, 정비비를 기록하고 월별 합계를 확인하세요.</p>
     </header>
 
-    <section class="card">
-      <h2>지출 추가</h2>
-      <form id="record-form" class="form-grid">
-        <label>
+    <section class="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
+      <h2 class="text-xl font-bold">지출 추가</h2>
+      <form id="record-form" class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <label class="grid gap-1 text-sm font-medium">
           날짜
-          <input type="date" id="date" required />
+          <input class="h-11 rounded-xl border border-slate-300 px-3 outline-none ring-blue-500 focus:ring-2" type="date" id="date" required />
         </label>
-        <label>
+        <label class="grid gap-1 text-sm font-medium">
           항목
-          <select id="category" required>
+          <select class="h-11 rounded-xl border border-slate-300 px-3 outline-none ring-blue-500 focus:ring-2" id="category" required>
             <option value="fuel">유류비</option>
             <option value="toll">통행료</option>
             <option value="maintenance">정비</option>
@@ -35,107 +35,109 @@
             <option value="other">기타</option>
           </select>
         </label>
-        <label>
+        <label class="grid gap-1 text-sm font-medium">
           금액(달러)
-          <input type="number" id="amount" min="0" step="0.01" required />
+          <input class="h-11 rounded-xl border border-slate-300 px-3 outline-none ring-blue-500 focus:ring-2" type="number" id="amount" min="0" step="0.01" required />
         </label>
-        <label>
+        <label class="grid gap-1 text-sm font-medium">
           주유량(갤런, 선택)
-          <input type="number" id="fuel-volume" min="0" step="0.01" />
+          <input class="h-11 rounded-xl border border-slate-300 px-3 outline-none ring-blue-500 focus:ring-2" type="number" id="fuel-volume" min="0" step="0.01" />
         </label>
-        <label>
+        <label class="grid gap-1 text-sm font-medium">
           갤런당 가격(자동)
-          <input type="text" id="price-per-gallon" placeholder="자동 계산" readonly />
+          <input class="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-slate-600" type="text" id="price-per-gallon" placeholder="자동 계산" readonly />
         </label>
-        <label>
+        <label class="grid gap-1 text-sm font-medium">
           주행거리(마일, 선택)
-          <input type="number" id="mileage" min="0" step="1" />
+          <input class="h-11 rounded-xl border border-slate-300 px-3 outline-none ring-blue-500 focus:ring-2" type="number" id="mileage" min="0" step="1" />
         </label>
-        <label class="full">
+        <label class="grid gap-1 text-sm font-medium md:col-span-2">
           메모(선택)
-          <input type="text" id="memo" maxlength="80" placeholder="예: 고속도로 왕복" />
+          <input class="h-11 rounded-xl border border-slate-300 px-3 outline-none ring-blue-500 focus:ring-2" type="text" id="memo" maxlength="80" placeholder="예: 고속도로 왕복" />
         </label>
-        <div class="form-actions full">
-          <button type="submit" id="submit-button" class="primary">추가</button>
-          <button type="button" id="cancel-edit-button" class="secondary" hidden>수정 취소</button>
+        <div class="grid gap-2 md:col-span-2 md:grid-cols-2">
+          <button type="submit" id="submit-button" class="h-11 rounded-xl bg-slate-900 font-bold text-white">추가</button>
+          <button type="button" id="cancel-edit-button" class="h-11 rounded-xl border border-slate-300 bg-slate-100 font-bold text-slate-700" hidden>수정 취소</button>
         </div>
       </form>
     </section>
 
-    <section class="card">
-      <div class="row-between">
-        <h2>기록 목록</h2>
-        <label class="month-filter">
+    <section class="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
+      <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <h2 class="text-xl font-bold">기록 목록</h2>
+        <label class="flex items-center gap-2 text-sm font-medium">
           월
-          <input type="month" id="month-filter" />
+          <input class="h-10 rounded-xl border border-slate-300 px-3 outline-none ring-blue-500 focus:ring-2" type="month" id="month-filter" />
         </label>
       </div>
-      <div class="storage-tools">
-        <button type="button" id="sync-now-button" class="secondary">지금 동기화</button>
-        <span id="sync-status"></span>
-        <div class="backup-actions">
-          <button type="button" id="export-backup-button" class="secondary">백업 내보내기</button>
-          <button type="button" id="import-backup-button" class="secondary">백업 불러오기</button>
+      <div class="mt-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div class="flex flex-1 items-center gap-2">
+          <button type="button" id="sync-now-button" class="h-10 rounded-xl border border-slate-300 bg-slate-100 px-4 font-semibold text-slate-800">지금 동기화</button>
+          <span id="sync-status" class="text-sm text-slate-600"></span>
+        </div>
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <button type="button" id="export-backup-button" class="h-10 rounded-xl border border-slate-300 bg-slate-100 px-4 font-semibold text-slate-800">백업 내보내기</button>
+          <button type="button" id="import-backup-button" class="h-10 rounded-xl border border-slate-300 bg-slate-100 px-4 font-semibold text-slate-800">백업 불러오기</button>
         </div>
         <input type="file" id="import-backup-file" accept="application/json" hidden />
       </div>
 
-      <div class="stats">
-        <div>
-          <span>전체 합계</span>
-          <strong id="total-amount">$0.00</strong>
+      <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div class="rounded-xl border border-slate-200 p-3 text-center">
+          <span class="block text-sm text-slate-500">전체 합계</span>
+          <strong id="total-amount" class="mt-1 block text-xl font-extrabold">$0.00</strong>
         </div>
-        <div>
-          <span>선택 월 합계</span>
-          <strong id="month-amount">$0.00</strong>
+        <div class="rounded-xl border border-slate-200 p-3 text-center">
+          <span class="block text-sm text-slate-500">선택 월 합계</span>
+          <strong id="month-amount" class="mt-1 block text-xl font-extrabold">$0.00</strong>
         </div>
-        <div>
-          <span>기록 수</span>
-          <strong id="record-count">0</strong>
+        <div class="rounded-xl border border-slate-200 p-3 text-center">
+          <span class="block text-sm text-slate-500">기록 수</span>
+          <strong id="record-count" class="mt-1 block text-xl font-extrabold">0</strong>
         </div>
       </div>
 
-      <div class="table-wrap">
-        <table class="record-table">
+      <div class="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <table class="record-table min-w-[980px] table-fixed border-collapse">
           <colgroup>
-            <col class="col-date" />
-            <col class="col-category" />
-            <col class="col-amount" />
-            <col class="col-fuel" />
-            <col class="col-price" />
-            <col class="col-mileage" />
-            <col class="col-memo" />
-            <col class="col-edit" />
-            <col class="col-delete" />
+            <col style="width: 12%" />
+            <col style="width: 10%" />
+            <col style="width: 12%" />
+            <col style="width: 11%" />
+            <col style="width: 13%" />
+            <col style="width: 12%" />
+            <col style="width: 16%" />
+            <col style="width: 7%" />
+            <col style="width: 7%" />
           </colgroup>
           <thead>
-            <tr>
-              <th>날짜</th>
-              <th>항목</th>
-              <th>금액</th>
-              <th>주유량</th>
-              <th>갤런당 가격</th>
-              <th>주행거리</th>
-              <th>메모</th>
-              <th>수정</th>
-              <th>삭제</th>
+            <tr class="bg-slate-50">
+              <th class="border-b border-slate-200 px-3 py-3 text-center text-sm font-extrabold text-slate-700">날짜</th>
+              <th class="border-b border-slate-200 px-3 py-3 text-center text-sm font-extrabold text-slate-700">항목</th>
+              <th class="border-b border-slate-200 px-3 py-3 text-center text-sm font-extrabold text-slate-700">금액</th>
+              <th class="border-b border-slate-200 px-3 py-3 text-center text-sm font-extrabold text-slate-700">주유량</th>
+              <th class="border-b border-slate-200 px-3 py-3 text-center text-sm font-extrabold text-slate-700">갤런당 가격</th>
+              <th class="border-b border-slate-200 px-3 py-3 text-center text-sm font-extrabold text-slate-700">주행거리</th>
+              <th class="border-b border-slate-200 px-3 py-3 text-center text-sm font-extrabold text-slate-700">메모</th>
+              <th class="border-b border-slate-200 px-3 py-3 text-center text-sm font-extrabold text-slate-700">수정</th>
+              <th class="border-b border-slate-200 px-3 py-3 text-center text-sm font-extrabold text-slate-700">삭제</th>
             </tr>
           </thead>
-          <tbody id="record-list"></tbody>
+          <tbody id="record-list" class="divide-y divide-slate-100"></tbody>
         </table>
       </div>
-      <p id="empty-state">아직 기록이 없습니다.</p>
+      <p id="empty-state" class="mt-3 text-sm text-slate-500">아직 기록이 없습니다.</p>
     </section>
 
-    <section class="card">
-      <h2>주유 간 주행거리 차이 그래프 (마일)</h2>
-      <div class="chart-wrap">
-        <canvas id="efficiency-chart" width="920" height="280" aria-label="주유 간 주행거리 차이 그래프"></canvas>
+    <section class="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
+      <h2 class="text-xl font-bold">주유 간 주행거리 차이 그래프 (마일)</h2>
+      <div class="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white p-2">
+        <canvas id="efficiency-chart" class="block min-w-[700px]" width="920" height="280" aria-label="주유 간 주행거리 차이 그래프"></canvas>
       </div>
-      <p id="chart-empty-state">그래프를 보려면 주행거리가 있는 유류비 기록이 2건 이상 필요합니다.</p>
+      <p id="chart-empty-state" class="mt-2 text-sm text-slate-500">그래프를 보려면 주행거리가 있는 유류비 기록이 2건 이상 필요합니다.</p>
     </section>
   </main>
 
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>
