@@ -82,7 +82,9 @@ function setSyncStatus(message) {
   lastSyncStatusMessage = message;
   syncStatusEl.textContent = message;
   if (syncRetryButton) {
-    syncRetryButton.hidden = !message.includes("실패");
+    const showRetry =
+      message.includes("실패") || message.includes("시간 초과") || message.includes("오류");
+    syncRetryButton.hidden = !showRetry;
   }
 }
 
@@ -720,6 +722,14 @@ async function fetchRemoteSyncData() {
       body: JSON.stringify(legacyData),
     });
     if (migrateResponse.ok) {
+      // Best-effort cleanup of legacy path to avoid dual-write divergence.
+      fetchWithTimeout(getLegacyRemotePath(), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: "null",
+      }).catch((cleanupError) => {
+        console.error("Legacy sync path cleanup failed:", cleanupError);
+      });
       setSyncStatus("기존 동기화 데이터 경로를 새 보안 경로로 이전했습니다.");
       return legacyData;
     }
@@ -882,6 +892,7 @@ function exportBackup() {
 async function importBackupFromFile(file) {
   if (!file) return;
 
+  let activeCount = 0;
   try {
     const text = await file.text();
     const parsed = JSON.parse(text);
@@ -897,16 +908,26 @@ async function importBackupFromFile(file) {
     updateStats();
     renderRecords();
     stopEdit();
-    const activeCount = records.filter((item) => !item.deletedAt).length;
-    setStorageStatus(`백업 복원 완료: ${activeCount}건`);
-
-    if (isSyncConfigured()) {
-      await syncNow({ showProgress: true, showResult: true, forcePush: true });
-    }
+    activeCount = records.filter((item) => !item.deletedAt).length;
   } catch (error) {
     console.error("Failed to import backup:", error);
     setStorageStatus("백업 복원에 실패했습니다.");
+    return;
   }
+
+  if (isSyncConfigured()) {
+    setStorageStatus(`백업 복원 완료: ${activeCount}건 (클라우드 반영 중)`);
+    try {
+      await syncNow({ showProgress: true, showResult: true, forcePush: true });
+      setStorageStatus(`백업 복원 및 클라우드 반영 완료: ${activeCount}건`);
+    } catch (error) {
+      console.error("Backup sync failed:", error);
+      setStorageStatus(`백업 복원 완료: ${activeCount}건 (클라우드 반영 실패)`);
+    }
+    return;
+  }
+
+  setStorageStatus(`백업 복원 완료: ${activeCount}건 (로컬 반영, 동기화 설정 없음)`);
 }
 
 form.addEventListener("submit", (event) => {
