@@ -253,21 +253,128 @@ button.danger {
 }
 
 @media (max-width: 720px) {
+  .container {
+    width: min(100%, 96vw);
+    margin: 12px auto 20px;
+    gap: 12px;
+  }
+
+  .card {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .hero h1,
+  .hero p,
+  h2 {
+    text-align: center;
+  }
+
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .row-between {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .month-filter {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .month-filter input {
+    min-width: 0;
+    width: 60%;
+  }
+
+  .storage-tools {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #sync-status {
+    white-space: normal;
+    text-align: center;
   }
 
   .stats {
     grid-template-columns: 1fr;
   }
 
-  .sync-tools {
-    grid-template-columns: 1fr;
-  }
-
   .backup-actions {
     margin-left: 0;
     width: 100%;
+    justify-content: stretch;
+  }
+
+  .backup-actions button,
+  #sync-now-button {
+    width: 100%;
+  }
+
+  .table-wrap {
+    overflow: visible;
+  }
+
+  table.record-table {
+    min-width: 0;
+    width: 100%;
+    table-layout: auto;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .record-table colgroup,
+  .record-table thead {
+    display: none;
+  }
+
+  .record-table tbody {
+    display: grid;
+    gap: 10px;
+  }
+
+  .record-table tr {
+    display: grid;
+    gap: 6px;
+    padding: 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #fff;
+  }
+
+  .record-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 0;
+    padding: 2px 0;
+    text-align: right;
+    white-space: normal;
+  }
+
+  .record-table td::before {
+    content: attr(data-label);
+    color: var(--subtle);
+    font-size: 0.82rem;
+    margin-right: 12px;
+    text-align: left;
+    flex: 0 0 auto;
+  }
+
+  .record-table td:last-child,
+  .record-table td:nth-last-child(2) {
     justify-content: flex-end;
+  }
+
+  .record-table td:last-child::before,
+  .record-table td:nth-last-child(2)::before {
+    margin-right: 8px;
   }
 }

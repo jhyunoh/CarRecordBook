@@ -383,15 +383,15 @@ function renderRecords() {
   for (const item of ordered) {
     const row = document.createElement("tr");
     row.innerHTML = `
-      <td>${item.date}</td>
-      <td>${CATEGORY_LABELS[item.category] || item.category}</td>
-      <td>${formatCurrency(item.amount)}</td>
-      <td>${item.fuelVolume ? `${formatNumber(item.fuelVolume)} 갤런` : "-"}</td>
-      <td>${item.fuelVolume && item.fuelVolume > 0 ? formatCurrency(item.amount / item.fuelVolume) : "-"}</td>
-      <td>${item.mileage ? `${item.mileage.toLocaleString("en-US")} 마일` : "-"}</td>
-      <td>${item.memo || "-"}</td>
-      <td><button class="secondary edit" data-id="${item.id}" type="button">수정</button></td>
-      <td><button class="danger" data-id="${item.id}" type="button">삭제</button></td>
+      <td data-label="날짜">${item.date}</td>
+      <td data-label="항목">${CATEGORY_LABELS[item.category] || item.category}</td>
+      <td data-label="금액">${formatCurrency(item.amount)}</td>
+      <td data-label="주유량">${item.fuelVolume ? `${formatNumber(item.fuelVolume)} 갤런` : "-"}</td>
+      <td data-label="갤런당 가격">${item.fuelVolume && item.fuelVolume > 0 ? formatCurrency(item.amount / item.fuelVolume) : "-"}</td>
+      <td data-label="주행거리">${item.mileage ? `${item.mileage.toLocaleString("en-US")} 마일` : "-"}</td>
+      <td data-label="메모">${item.memo || "-"}</td>
+      <td data-label="수정"><button class="secondary edit" data-id="${item.id}" type="button">수정</button></td>
+      <td data-label="삭제"><button class="danger" data-id="${item.id}" type="button">삭제</button></td>
     `;
     recordListEl.appendChild(row);
   }
