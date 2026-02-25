@@ -1,9 +1,9 @@
-const CACHE_NAME = "car-record-book-v2";
+const CACHE_NAME = "car-record-book-v6";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
-  "./app.js",
+  "./app.js?v=7",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",

@@ -117,9 +117,28 @@ button.secondary {
   flex-wrap: wrap;
 }
 
-#storage-status {
+.backup-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.sync-tools {
+  margin: 8px 0 12px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.sync-tools button {
+  white-space: nowrap;
+}
+
+#sync-status {
   color: var(--subtle);
   font-size: 0.86rem;
+  white-space: nowrap;
 }
 
 .stats {
@@ -149,15 +168,56 @@ button.secondary {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 700px;
+  min-width: 980px;
+}
+
+.record-table {
+  table-layout: fixed;
+}
+
+.record-table .col-date {
+  width: 12%;
+}
+
+.record-table .col-category {
+  width: 10%;
+}
+
+.record-table .col-amount {
+  width: 12%;
+}
+
+.record-table .col-fuel {
+  width: 11%;
+}
+
+.record-table .col-price {
+  width: 13%;
+}
+
+.record-table .col-mileage {
+  width: 11%;
+}
+
+.record-table .col-memo {
+  width: 19%;
+}
+
+.record-table .col-edit,
+.record-table .col-delete {
+  width: 6%;
 }
 
 th,
 td {
   border-bottom: 1px solid #e2e8f0;
-  text-align: left;
+  text-align: center;
   padding: 10px 8px;
   font-size: 0.92rem;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 button.danger {
@@ -199,5 +259,15 @@ button.danger {
 
   .stats {
     grid-template-columns: 1fr;
+  }
+
+  .sync-tools {
+    grid-template-columns: 1fr;
+  }
+
+  .backup-actions {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
   }
 }

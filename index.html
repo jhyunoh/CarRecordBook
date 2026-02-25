@@ -71,10 +71,13 @@
         </label>
       </div>
       <div class="storage-tools">
-        <button type="button" id="export-backup-button" class="secondary">백업 내보내기</button>
-        <button type="button" id="import-backup-button" class="secondary">백업 불러오기</button>
+        <button type="button" id="sync-now-button" class="secondary">지금 동기화</button>
+        <span id="sync-status"></span>
+        <div class="backup-actions">
+          <button type="button" id="export-backup-button" class="secondary">백업 내보내기</button>
+          <button type="button" id="import-backup-button" class="secondary">백업 불러오기</button>
+        </div>
         <input type="file" id="import-backup-file" accept="application/json" hidden />
-        <span id="storage-status"></span>
       </div>
 
       <div class="stats">
@@ -93,7 +96,18 @@
       </div>
 
       <div class="table-wrap">
-        <table>
+        <table class="record-table">
+          <colgroup>
+            <col class="col-date" />
+            <col class="col-category" />
+            <col class="col-amount" />
+            <col class="col-fuel" />
+            <col class="col-price" />
+            <col class="col-mileage" />
+            <col class="col-memo" />
+            <col class="col-edit" />
+            <col class="col-delete" />
+          </colgroup>
           <thead>
             <tr>
               <th>날짜</th>
@@ -122,6 +136,6 @@
     </section>
   </main>
 
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

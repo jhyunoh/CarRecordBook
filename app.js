@@ -2,6 +2,9 @@ const STORAGE_KEY = "car-records-v1";
 const DB_NAME = "car-record-book-db";
 const DB_STORE = "records";
 
+const HARDCODED_SYNC_URL = "https://carrecordbook-default-rtdb.firebaseio.com";
+const HARDCODED_SYNC_ID = "car";
+
 const CATEGORY_LABELS = {
   fuel: "유류비",
   toll: "통행료",
@@ -28,6 +31,9 @@ const importBackupButton = document.getElementById("import-backup-button");
 const importBackupFileInput = document.getElementById("import-backup-file");
 const storageStatusEl = document.getElementById("storage-status");
 
+const syncNowButton = document.getElementById("sync-now-button");
+const syncStatusEl = document.getElementById("sync-status");
+
 const totalAmountEl = document.getElementById("total-amount");
 const monthAmountEl = document.getElementById("month-amount");
 const recordCountEl = document.getElementById("record-count");
@@ -38,6 +44,8 @@ const chartEmptyStateEl = document.getElementById("chart-empty-state");
 
 let records = [];
 let editingRecordId = null;
+let syncTimer = null;
+let lastSyncStatusMessage = "";
 
 function createId() {
   if (window.crypto && typeof window.crypto.randomUUID === "function") {
@@ -46,9 +54,41 @@ function createId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function nowIso() {
+  return new Date().toISOString();
+}
+
 function setStorageStatus(message) {
   if (!storageStatusEl) return;
   storageStatusEl.textContent = message;
+}
+
+function setSyncStatus(message) {
+  if (!syncStatusEl) return;
+  if (message === lastSyncStatusMessage) return;
+  lastSyncStatusMessage = message;
+  syncStatusEl.textContent = message;
+}
+
+function normalizeSyncUrl(url) {
+  return url.trim().replace(/\/$/, "");
+}
+
+function getSyncConfig() {
+  return {
+    url: normalizeSyncUrl(HARDCODED_SYNC_URL),
+    syncId: HARDCODED_SYNC_ID,
+  };
+}
+
+function isSyncConfigured() {
+  const cfg = getSyncConfig();
+  return Boolean(cfg.url && cfg.syncId);
+}
+
+function getRemotePath() {
+  const cfg = getSyncConfig();
+  return `${cfg.url}/carRecordSync/${encodeURIComponent(cfg.syncId)}.json`;
 }
 
 function openDatabase() {
@@ -110,9 +150,7 @@ async function writeRecordsToIndexedDB(nextRecords) {
 async function loadRecords() {
   try {
     const fromDb = await readRecordsFromIndexedDB();
-    if (fromDb) {
-      return fromDb;
-    }
+    if (fromDb) return fromDb;
   } catch (error) {
     console.error("Failed to load from IndexedDB:", error);
   }
@@ -138,6 +176,7 @@ function saveRecords() {
     console.error("Failed to save records to IndexedDB:", error);
     setStorageStatus("저장은 되었지만 영구 저장소 동기화 중 오류가 발생했습니다.");
   });
+  queueAutoSync();
 }
 
 async function requestPersistentStorage() {
@@ -241,7 +280,7 @@ function sortRecordsAsc(list) {
   });
 }
 
-function renderEfficiencyChart() {
+function renderMileageGapChart() {
   if (!efficiencyChartEl) return;
   const ctx = efficiencyChartEl.getContext("2d");
   if (!ctx) return;
@@ -256,18 +295,12 @@ function renderEfficiencyChart() {
     const curr = fuelMileageRecords[i];
     const deltaMiles = Number(curr.mileage) - Number(prev.mileage);
     if (Number.isFinite(deltaMiles) && deltaMiles > 0) {
-      points.push({
-        date: curr.date,
-        deltaMiles,
-      });
+      points.push({ date: curr.date, deltaMiles });
     }
   }
 
   ctx.clearRect(0, 0, efficiencyChartEl.width, efficiencyChartEl.height);
-
-  if (chartEmptyStateEl) {
-    chartEmptyStateEl.hidden = points.length > 0;
-  }
+  if (chartEmptyStateEl) chartEmptyStateEl.hidden = points.length > 0;
   if (points.length === 0) return;
 
   const w = efficiencyChartEl.width;
@@ -339,8 +372,7 @@ function renderEfficiencyChart() {
   const step = Math.max(1, Math.ceil(points.length / 6));
   for (let i = 0; i < points.length; i += step) {
     const x = xAt(i);
-    const label = points[i].date.slice(5);
-    ctx.fillText(label, x, h - bottom + 8);
+    ctx.fillText(points[i].date.slice(5), x, h - bottom + 8);
   }
 }
 
@@ -350,15 +382,12 @@ function renderRecords() {
   recordListEl.innerHTML = "";
   for (const item of ordered) {
     const row = document.createElement("tr");
-
     row.innerHTML = `
       <td>${item.date}</td>
       <td>${CATEGORY_LABELS[item.category] || item.category}</td>
       <td>${formatCurrency(item.amount)}</td>
       <td>${item.fuelVolume ? `${formatNumber(item.fuelVolume)} 갤런` : "-"}</td>
-      <td>${
-        item.fuelVolume && item.fuelVolume > 0 ? formatCurrency(item.amount / item.fuelVolume) : "-"
-      }</td>
+      <td>${item.fuelVolume && item.fuelVolume > 0 ? formatCurrency(item.amount / item.fuelVolume) : "-"}</td>
       <td>${item.mileage ? `${item.mileage.toLocaleString("en-US")} 마일` : "-"}</td>
       <td>${item.memo || "-"}</td>
       <td><button class="secondary edit" data-id="${item.id}" type="button">수정</button></td>
@@ -368,7 +397,7 @@ function renderRecords() {
   }
 
   emptyStateEl.hidden = records.length > 0;
-  renderEfficiencyChart();
+  renderMileageGapChart();
 }
 
 function resetForm() {
@@ -413,6 +442,7 @@ function normalizeRecord(item) {
     item.fuelVolume === null || item.fuelVolume === undefined || item.fuelVolume === ""
       ? null
       : Number(item.fuelVolume);
+  const updatedAt = item.updatedAt || item.createdAt || nowIso();
 
   return {
     id: item.id || createId(),
@@ -422,22 +452,107 @@ function normalizeRecord(item) {
     mileage: Number.isFinite(mileage) ? mileage : null,
     fuelVolume: Number.isFinite(fuelVolume) ? fuelVolume : null,
     memo: typeof item.memo === "string" ? item.memo : "",
-    createdAt: item.createdAt || new Date().toISOString(),
+    createdAt: item.createdAt || nowIso(),
+    updatedAt,
   };
+}
+
+function getLatestRecordTime(recordsList) {
+  if (recordsList.length === 0) return "1970-01-01T00:00:00.000Z";
+  return recordsList
+    .map((item) => item.updatedAt || item.createdAt || "1970-01-01T00:00:00.000Z")
+    .sort()
+    .at(-1);
+}
+
+async function fetchRemoteSyncData() {
+  const response = await fetch(getRemotePath(), { method: "GET" });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`동기화 읽기 실패 (${response.status}): ${body.slice(0, 180)}`);
+  }
+  return response.json();
+}
+
+async function pushRemoteSyncData() {
+  const payload = {
+    records,
+    updatedAt: nowIso(),
+  };
+  const response = await fetch(getRemotePath(), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`동기화 쓰기 실패 (${response.status}): ${body.slice(0, 180)}`);
+  }
+}
+
+async function syncNow(options = {}) {
+  const { showProgress = true, showResult = true } = options;
+
+  if (!isSyncConfigured()) {
+    setSyncStatus("동기화 설정(Firebase DB URL, 동기화 ID)을 먼저 저장하세요.");
+    return;
+  }
+
+  if (showProgress) {
+    setSyncStatus("동기화 중...");
+  }
+
+  try {
+    const remote = await fetchRemoteSyncData();
+    const remoteRecords = remote && Array.isArray(remote.records) ? remote.records.map(normalizeRecord) : [];
+
+    const localLatest = getLatestRecordTime(records);
+    const remoteLatest = remote && remote.updatedAt ? remote.updatedAt : getLatestRecordTime(remoteRecords);
+
+    if (remoteRecords.length > 0 && remoteLatest > localLatest) {
+      records = remoteRecords;
+      saveRecords();
+      updateStats();
+      renderRecords();
+      stopEdit();
+      if (showResult) {
+        setSyncStatus(`클라우드에서 최신 데이터 반영 완료 (${records.length}건)`);
+      }
+      return;
+    }
+
+    await pushRemoteSyncData();
+    if (showResult) {
+      setSyncStatus("로컬 최신 데이터가 클라우드에 업로드되었습니다.");
+    }
+  } catch (error) {
+    console.error(error);
+    setSyncStatus(error instanceof Error ? error.message : "동기화 실패");
+  }
+}
+
+function queueAutoSync() {
+  if (!isSyncConfigured()) return;
+  if (syncTimer) window.clearTimeout(syncTimer);
+  syncTimer = window.setTimeout(() => {
+    syncNow({ showProgress: false, showResult: false }).catch((error) => {
+      console.error(error);
+      setSyncStatus("자동 동기화 실패");
+    });
+  }, 800);
 }
 
 function exportBackup() {
   const payload = {
     version: 1,
-    exportedAt: new Date().toISOString(),
+    exportedAt: nowIso(),
     records,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
-  const dateStamp = getLocalDateString();
   anchor.href = url;
-  anchor.download = `car-record-backup-${dateStamp}.json`;
+  anchor.download = `car-record-backup-${getLocalDateString()}.json`;
   anchor.click();
   URL.revokeObjectURL(url);
   setStorageStatus("백업 파일을 내보냈습니다.");
@@ -497,10 +612,12 @@ form.addEventListener("submit", (event) => {
             mileage,
             fuelVolume,
             memo: memoInput.value.trim(),
+            updatedAt: nowIso(),
           }
         : item,
     );
   } else {
+    const createdAt = nowIso();
     records.push({
       id: createId(),
       date,
@@ -509,7 +626,8 @@ form.addEventListener("submit", (event) => {
       mileage,
       fuelVolume,
       memo: memoInput.value.trim(),
-      createdAt: new Date().toISOString(),
+      createdAt,
+      updatedAt: createdAt,
     });
   }
 
@@ -529,9 +647,7 @@ recordListEl.addEventListener("click", (event) => {
   }
 
   records = records.filter((item) => item.id !== target.dataset.id);
-  if (editingRecordId === target.dataset.id) {
-    stopEdit();
-  }
+  if (editingRecordId === target.dataset.id) stopEdit();
   saveRecords();
   updateStats();
   renderRecords();
@@ -539,15 +655,10 @@ recordListEl.addEventListener("click", (event) => {
 
 monthFilterInput.addEventListener("change", updateStats);
 amountInput.addEventListener("input", updatePricePerGallonPreview);
-if (fuelVolumeInput) {
-  fuelVolumeInput.addEventListener("input", updatePricePerGallonPreview);
-}
-if (cancelEditButton) {
-  cancelEditButton.addEventListener("click", stopEdit);
-}
-if (exportBackupButton) {
-  exportBackupButton.addEventListener("click", exportBackup);
-}
+if (fuelVolumeInput) fuelVolumeInput.addEventListener("input", updatePricePerGallonPreview);
+if (cancelEditButton) cancelEditButton.addEventListener("click", stopEdit);
+
+if (exportBackupButton) exportBackupButton.addEventListener("click", exportBackup);
 if (importBackupButton && importBackupFileInput) {
   importBackupButton.addEventListener("click", () => importBackupFileInput.click());
   importBackupFileInput.addEventListener("change", async (event) => {
@@ -559,6 +670,15 @@ if (importBackupButton && importBackupFileInput) {
   });
 }
 
+if (syncNowButton) {
+  syncNowButton.addEventListener("click", () => {
+    syncNow().catch((error) => {
+      console.error(error);
+      setSyncStatus("동기화 실패");
+    });
+  });
+}
+
 async function initializeApp() {
   monthFilterInput.value = getCurrentMonth();
   resetForm();
@@ -567,7 +687,14 @@ async function initializeApp() {
   records = (await loadRecords()).map(normalizeRecord);
   updateStats();
   renderRecords();
+
   await requestPersistentStorage();
+
+  if (isSyncConfigured()) {
+    await syncNow();
+  } else {
+    setSyncStatus("동기화 설정이 올바르지 않습니다.");
+  }
 }
 
 initializeApp().catch((error) => {
