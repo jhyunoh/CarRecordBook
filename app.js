@@ -45,6 +45,7 @@ const chartEmptyStateEl = document.getElementById("chart-empty-state");
 let records = [];
 let editingRecordId = null;
 let lastSyncStatusMessage = "";
+let pullPollingTimer = null;
 
 function createId() {
   if (window.crypto && typeof window.crypto.randomUUID === "function") {
@@ -515,7 +516,7 @@ async function pushRemoteSyncData() {
 }
 
 async function syncNow(options = {}) {
-  const { showProgress = true, showResult = true, preferRemote = false } = options;
+  const { showProgress = true, showResult = true, preferRemote = false, pullOnly = false } = options;
 
   if (!isSyncConfigured()) {
     setSyncStatus("동기화 설정(Firebase DB URL, 동기화 ID)을 먼저 저장하세요.");
@@ -553,14 +554,33 @@ async function syncNow(options = {}) {
       return;
     }
 
-    await pushRemoteSyncData();
-    if (showResult) {
-      setSyncStatus("로컬 최신 데이터가 클라우드에 업로드되었습니다.");
+    if (!pullOnly) {
+      await pushRemoteSyncData();
+      if (showResult) {
+        setSyncStatus("로컬 최신 데이터가 클라우드에 업로드되었습니다.");
+      }
     }
   } catch (error) {
     console.error(error);
     setSyncStatus(error instanceof Error ? error.message : "동기화 실패");
   }
+}
+
+function stopPullPolling() {
+  if (pullPollingTimer !== null) {
+    window.clearInterval(pullPollingTimer);
+    pullPollingTimer = null;
+  }
+}
+
+function startPullPolling() {
+  if (!isSyncConfigured() || pullPollingTimer !== null) return;
+  pullPollingTimer = window.setInterval(() => {
+    if (document.hidden) return;
+    syncNow({ showProgress: false, showResult: false, pullOnly: true }).catch((error) => {
+      console.error(error);
+    });
+  }, 15000);
 }
 
 function exportBackup() {
@@ -720,6 +740,7 @@ async function initializeApp() {
 
   if (isSyncConfigured()) {
     await syncNow({ showProgress: false, showResult: false });
+    startPullPolling();
   } else {
     setSyncStatus("동기화 설정이 올바르지 않습니다.");
   }
@@ -737,3 +758,13 @@ if ("serviceWorker" in navigator) {
     });
   });
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+  if (!isSyncConfigured()) return;
+  syncNow({ showProgress: false, showResult: false, pullOnly: true }).catch((error) => {
+    console.error(error);
+  });
+});
+
+window.addEventListener("beforeunload", stopPullPolling);
