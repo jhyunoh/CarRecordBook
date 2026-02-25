@@ -1,6 +1,7 @@
 const STORAGE_KEY = "car-records-v1";
 const DB_NAME = "car-record-book-db";
 const DB_STORE = "records";
+const SYNC_UPDATED_AT_KEY = "car-sync-updated-at";
 
 const HARDCODED_SYNC_URL = "https://carrecordbook-default-rtdb.firebaseio.com";
 const HARDCODED_SYNC_ID = "car";
@@ -66,6 +67,16 @@ function setSyncStatus(message) {
   if (message === lastSyncStatusMessage) return;
   lastSyncStatusMessage = message;
   syncStatusEl.textContent = message;
+}
+
+function getLocalSyncUpdatedAt() {
+  const stored = localStorage.getItem(SYNC_UPDATED_AT_KEY);
+  if (stored) return stored;
+  return getLatestRecordTime(records);
+}
+
+function setLocalSyncUpdatedAt(value) {
+  localStorage.setItem(SYNC_UPDATED_AT_KEY, value);
 }
 
 function normalizeSyncUrl(url) {
@@ -168,7 +179,11 @@ async function loadRecords() {
   }
 }
 
-function saveRecords() {
+function saveRecords(options = {}) {
+  const { markChanged = false } = options;
+  if (markChanged) {
+    setLocalSyncUpdatedAt(nowIso());
+  }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
   writeRecordsToIndexedDB(records).catch((error) => {
     console.error("Failed to save records to IndexedDB:", error);
@@ -483,9 +498,10 @@ async function fetchRemoteSyncData() {
 }
 
 async function pushRemoteSyncData() {
+  const localUpdatedAt = getLocalSyncUpdatedAt();
   const payload = {
     records,
-    updatedAt: nowIso(),
+    updatedAt: localUpdatedAt,
   };
   const response = await fetch(getRemotePath(), {
     method: "PUT",
@@ -499,7 +515,7 @@ async function pushRemoteSyncData() {
 }
 
 async function syncNow(options = {}) {
-  const { showProgress = true, showResult = true } = options;
+  const { showProgress = true, showResult = true, preferRemote = false } = options;
 
   if (!isSyncConfigured()) {
     setSyncStatus("동기화 설정(Firebase DB URL, 동기화 ID)을 먼저 저장하세요.");
@@ -514,10 +530,13 @@ async function syncNow(options = {}) {
     const remote = await fetchRemoteSyncData();
     const remoteRecords = remote && Array.isArray(remote.records) ? remote.records.map(normalizeRecord) : [];
 
-    const localLatest = getLatestRecordTime(records);
+    const localLatest = getLocalSyncUpdatedAt();
     const remoteLatest = remote && remote.updatedAt ? remote.updatedAt : getLatestRecordTime(remoteRecords);
 
-    if (remoteRecords.length > 0 && remoteLatest > localLatest) {
+    const shouldApplyRemote =
+      remoteRecords.length > 0 && (preferRemote || remoteLatest > localLatest);
+
+    if (shouldApplyRemote) {
       if (isFormBeingEdited()) {
         setSyncStatus("입력 중이라 클라우드 최신 데이터 자동 반영을 보류했습니다.");
         return;
@@ -525,6 +544,7 @@ async function syncNow(options = {}) {
 
       records = remoteRecords;
       saveRecords();
+      setLocalSyncUpdatedAt(remoteLatest || nowIso());
       updateStats();
       renderRecords();
       if (showResult) {
@@ -573,7 +593,7 @@ async function importBackupFromFile(file) {
     }
 
     records = importedRecords.map(normalizeRecord);
-    saveRecords();
+    saveRecords({ markChanged: true });
     updateStats();
     renderRecords();
     stopEdit();
@@ -634,7 +654,7 @@ form.addEventListener("submit", (event) => {
     });
   }
 
-  saveRecords();
+  saveRecords({ markChanged: true });
   updateStats();
   renderRecords();
   stopEdit();
@@ -658,7 +678,7 @@ recordListEl.addEventListener("click", (event) => {
 
   records = records.filter((item) => item.id !== target.dataset.id);
   if (editingRecordId === target.dataset.id) stopEdit();
-  saveRecords();
+  saveRecords({ markChanged: true });
   updateStats();
   renderRecords();
 
@@ -699,7 +719,7 @@ async function initializeApp() {
   await requestPersistentStorage();
 
   if (isSyncConfigured()) {
-    await syncNow({ showProgress: false, showResult: false });
+    await syncNow({ showProgress: false, showResult: false, preferRemote: true });
   } else {
     setSyncStatus("동기화 설정이 올바르지 않습니다.");
   }
