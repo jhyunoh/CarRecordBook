@@ -1,9 +1,9 @@
-const CACHE_NAME = "car-record-book-v26";
+const CACHE_NAME = "car-record-book-v27";
 const ASSETS = [
   "./",
   "./index.html",
-  "./tailwind.local.css?v=1",
-  "./app.js?v=24",
+  "./tailwind.local.css",
+  "./app.js",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
@@ -46,15 +46,18 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((response) => {
-          const cloned = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned));
-          return response;
-        })
-        .catch(() => caches.match(event.request));
-    }),
+    fetch(event.request)
+      .then((response) => {
+        if (!response || !response.ok) return response;
+        const cloned = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned));
+        return response;
+      })
+      .catch(() =>
+        caches.match(event.request).then((cached) => {
+          if (cached) return cached;
+          return new Response("Offline", { status: 504, statusText: "Offline" });
+        }),
+      ),
   );
 });

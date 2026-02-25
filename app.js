@@ -5,6 +5,7 @@ const SYNC_UPDATED_AT_KEY = "car-sync-updated-at";
 const SYNC_REV_KEY = "car-sync-rev";
 const SYNC_DIRTY_KEY = "car-sync-dirty";
 const SYNC_LAST_SUCCESS_AT_KEY = "car-sync-last-success-at";
+const TOMBSTONE_RETENTION_DAYS = 30;
 
 const HARDCODED_SYNC_URL = "https://carrecordbook-default-rtdb.firebaseio.com";
 const HARDCODED_SYNC_ID = "car";
@@ -323,15 +324,16 @@ function getSelectedMonth() {
 }
 
 function updateStats() {
-  const total = records.reduce((sum, item) => sum + item.amount, 0);
+  const activeRecords = records.filter((item) => !item.deletedAt);
+  const total = activeRecords.reduce((sum, item) => sum + item.amount, 0);
   const selectedMonth = getSelectedMonth();
-  const monthTotal = records
+  const monthTotal = activeRecords
     .filter((item) => item.date.startsWith(selectedMonth))
     .reduce((sum, item) => sum + item.amount, 0);
 
   totalAmountEl.textContent = formatCurrency(total);
   monthAmountEl.textContent = formatCurrency(monthTotal);
-  recordCountEl.textContent = `${records.length}`;
+  recordCountEl.textContent = `${activeRecords.length}`;
 }
 
 function sortRecordsDesc(list) {
@@ -354,7 +356,8 @@ function renderMileageGapChart() {
   if (!ctx) return;
 
   const fuelMileageRecords = sortRecordsAsc(records).filter(
-    (item) => item.category === "fuel" && item.mileage !== null && item.mileage !== undefined,
+    (item) =>
+      !item.deletedAt && item.category === "fuel" && item.mileage !== null && item.mileage !== undefined,
   );
 
   const points = [];
@@ -445,7 +448,7 @@ function renderMileageGapChart() {
 }
 
 function renderRecords() {
-  const ordered = sortRecordsDesc(records);
+  const ordered = sortRecordsDesc(records.filter((item) => !item.deletedAt));
 
   recordListEl.innerHTML = "";
   for (const item of ordered) {
@@ -511,7 +514,7 @@ function renderRecords() {
     deleteButton.type = "button";
     deleteButton.dataset.id = item.id;
     deleteButton.className =
-      "inline-flex h-10 min-w-[72px] items-center justify-center whitespace-nowrap rounded-lg border border-rose-200 bg-rose-100 px-4 text-sm font-bold text-rose-700 hover:bg-rose-200";
+      "delete inline-flex h-10 min-w-[72px] items-center justify-center whitespace-nowrap rounded-lg border border-rose-200 bg-rose-100 px-4 text-sm font-bold text-rose-700 hover:bg-rose-200";
     deleteButton.textContent = "삭제";
     deleteTd.appendChild(deleteButton);
     row.appendChild(deleteTd);
@@ -519,7 +522,7 @@ function renderRecords() {
     recordListEl.appendChild(row);
   }
 
-  emptyStateEl.hidden = records.length > 0;
+  emptyStateEl.hidden = ordered.length > 0;
   renderMileageGapChart();
 }
 
@@ -534,7 +537,7 @@ function resetForm() {
 }
 
 function startEdit(recordId) {
-  const record = records.find((item) => item.id === recordId);
+  const record = records.find((item) => item.id === recordId && !item.deletedAt);
   if (!record) return;
 
   editingRecordId = record.id;
@@ -576,6 +579,7 @@ function normalizeRecord(item) {
       ? null
       : Number(item.fuelVolume);
   const updatedAt = item.updatedAt || item.createdAt || nowIso();
+  const deletedAt = item.deletedAt || null;
 
   return {
     id: item.id || createId(),
@@ -587,7 +591,54 @@ function normalizeRecord(item) {
     memo: typeof item.memo === "string" ? item.memo : "",
     createdAt: item.createdAt || nowIso(),
     updatedAt,
+    deletedAt,
   };
+}
+
+function getRecordTimestamp(record) {
+  return record.updatedAt || record.createdAt || "1970-01-01T00:00:00.000Z";
+}
+
+function mergeRecordsLastWriteWins(localRecords, remoteRecords) {
+  const byId = new Map();
+  const merged = [];
+
+  for (const item of localRecords) {
+    const normalized = normalizeRecord(item);
+    byId.set(normalized.id, normalized);
+    merged.push(normalized);
+  }
+
+  for (const remoteItem of remoteRecords) {
+    const normalizedRemote = normalizeRecord(remoteItem);
+    const current = byId.get(normalizedRemote.id);
+    if (!current) {
+      byId.set(normalizedRemote.id, normalizedRemote);
+      merged.push(normalizedRemote);
+      continue;
+    }
+
+    const currentTs = getRecordTimestamp(current);
+    const remoteTs = getRecordTimestamp(normalizedRemote);
+    if (remoteTs >= currentTs) {
+      const idx = merged.findIndex((item) => item.id === current.id);
+      if (idx >= 0) merged[idx] = normalizedRemote;
+      byId.set(normalizedRemote.id, normalizedRemote);
+    }
+  }
+
+  return merged;
+}
+
+function pruneOldDeletedRecords(list) {
+  const retentionMs = TOMBSTONE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  return list.filter((item) => {
+    if (!item.deletedAt) return true;
+    const deletedAt = new Date(item.deletedAt).getTime();
+    if (Number.isNaN(deletedAt)) return true;
+    return now - deletedAt <= retentionMs;
+  });
 }
 
 function getLatestRecordTime(recordsList) {
@@ -660,7 +711,21 @@ async function syncNow(options = {}) {
         return;
       }
 
-      records = remoteRecords;
+      if (isLocalSyncDirty() && !pullOnly) {
+        const merged = pruneOldDeletedRecords(mergeRecordsLastWriteWins(records, remoteRecords));
+        records = merged;
+        saveRecords({ markChanged: true });
+        await pushRemoteSyncData();
+        markSyncSuccess(nowIso());
+        updateStats();
+        renderRecords();
+        if (showResult) {
+          setSyncStatus(`충돌 병합 후 클라우드에 반영 완료 (${records.filter((item) => !item.deletedAt).length}건)`);
+        }
+        return;
+      }
+
+      records = pruneOldDeletedRecords(remoteRecords);
       saveRecords();
       setLocalSyncUpdatedAt(remoteLatest || nowIso());
       setLocalSyncRev(remoteRev);
@@ -669,12 +734,13 @@ async function syncNow(options = {}) {
       updateStats();
       renderRecords();
       if (showResult) {
-        setSyncStatus(`클라우드에서 최신 데이터 반영 완료 (${records.length}건)`);
+        setSyncStatus(`클라우드에서 최신 데이터 반영 완료 (${records.filter((item) => !item.deletedAt).length}건)`);
       }
       return;
     }
 
     if (!pullOnly) {
+      records = pruneOldDeletedRecords(records);
       await pushRemoteSyncData();
       markSyncSuccess(nowIso());
       if (showResult) {
@@ -828,7 +894,18 @@ recordListEl.addEventListener("click", (event) => {
     return;
   }
 
-  records = records.filter((item) => item.id !== target.dataset.id);
+  if (!target.classList.contains("delete")) return;
+
+  const deletedAt = nowIso();
+  records = records.map((item) =>
+    item.id === target.dataset.id
+      ? {
+          ...item,
+          deletedAt,
+          updatedAt: deletedAt,
+        }
+      : item,
+  );
   if (editingRecordId === target.dataset.id) stopEdit();
   saveRecords({ markChanged: true });
   updateStats();
