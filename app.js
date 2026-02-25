@@ -719,7 +719,7 @@ async function initializeApp() {
   await requestPersistentStorage();
 
   if (isSyncConfigured()) {
-    await syncNow({ showProgress: false, showResult: false, preferRemote: true });
+    await syncNow({ showProgress: false, showResult: false });
   } else {
     setSyncStatus("동기화 설정이 올바르지 않습니다.");
   }
