@@ -51,6 +51,7 @@ let records = [];
 let editingRecordId = null;
 let lastSyncStatusMessage = "";
 let pullPollingTimer = null;
+let syncInFlight = null;
 
 function createId() {
   if (window.crypto && typeof window.crypto.randomUUID === "function") {
@@ -450,17 +451,71 @@ function renderRecords() {
   for (const item of ordered) {
     const row = document.createElement("tr");
     row.className = "transition-colors hover:bg-slate-50";
-    row.innerHTML = `
-      <td class="px-3 py-3 text-center text-[15px] font-semibold text-slate-800 tabular-nums">${item.date}</td>
-      <td class="px-3 py-3 text-center text-[15px] font-semibold text-slate-800">${CATEGORY_LABELS[item.category] || item.category}</td>
-      <td class="px-3 py-3 text-center text-[15px] font-bold text-slate-900 tabular-nums">${formatCurrency(item.amount)}</td>
-      <td class="px-3 py-3 text-center text-[15px] text-slate-800 tabular-nums">${item.fuelVolume ? `${formatNumber(item.fuelVolume)} 갤런` : "-"}</td>
-      <td class="px-3 py-3 text-center text-[15px] text-slate-800 tabular-nums">${item.fuelVolume && item.fuelVolume > 0 ? formatCurrency(item.amount / item.fuelVolume) : "-"}</td>
-      <td class="px-3 py-3 text-center text-[15px] text-slate-800 tabular-nums">${item.mileage ? `${item.mileage.toLocaleString("en-US")} 마일` : "-"}</td>
-      <td class="px-3 py-3 text-center text-[14px] text-slate-500">${item.memo || "-"}</td>
-      <td class="px-3 py-3 text-center"><button class="edit inline-flex h-10 min-w-[72px] items-center justify-center whitespace-nowrap rounded-lg border border-slate-300 bg-slate-100 px-4 text-sm font-bold text-slate-700 hover:bg-slate-200" data-id="${item.id}" type="button">수정</button></td>
-      <td class="px-3 py-3 text-center"><button class="inline-flex h-10 min-w-[72px] items-center justify-center whitespace-nowrap rounded-lg border border-rose-200 bg-rose-100 px-4 text-sm font-bold text-rose-700 hover:bg-rose-200" data-id="${item.id}" type="button">삭제</button></td>
-    `;
+
+    function makeCell(text, classes) {
+      const td = document.createElement("td");
+      td.className = classes;
+      td.textContent = text;
+      return td;
+    }
+
+    row.appendChild(
+      makeCell(item.date, "px-3 py-3 text-center text-[15px] font-semibold text-slate-800 tabular-nums"),
+    );
+    row.appendChild(
+      makeCell(
+        CATEGORY_LABELS[item.category] || item.category,
+        "px-3 py-3 text-center text-[15px] font-semibold text-slate-800",
+      ),
+    );
+    row.appendChild(
+      makeCell(
+        formatCurrency(item.amount),
+        "px-3 py-3 text-center text-[15px] font-bold text-slate-900 tabular-nums",
+      ),
+    );
+    row.appendChild(
+      makeCell(
+        item.fuelVolume ? `${formatNumber(item.fuelVolume)} 갤런` : "-",
+        "px-3 py-3 text-center text-[15px] text-slate-800 tabular-nums",
+      ),
+    );
+    row.appendChild(
+      makeCell(
+        item.fuelVolume && item.fuelVolume > 0 ? formatCurrency(item.amount / item.fuelVolume) : "-",
+        "px-3 py-3 text-center text-[15px] text-slate-800 tabular-nums",
+      ),
+    );
+    row.appendChild(
+      makeCell(
+        item.mileage ? `${item.mileage.toLocaleString("en-US")} 마일` : "-",
+        "px-3 py-3 text-center text-[15px] text-slate-800 tabular-nums",
+      ),
+    );
+    row.appendChild(makeCell(item.memo || "-", "px-3 py-3 text-center text-[14px] text-slate-500"));
+
+    const editTd = document.createElement("td");
+    editTd.className = "px-3 py-3 text-center";
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.dataset.id = item.id;
+    editButton.className =
+      "edit inline-flex h-10 min-w-[72px] items-center justify-center whitespace-nowrap rounded-lg border border-slate-300 bg-slate-100 px-4 text-sm font-bold text-slate-700 hover:bg-slate-200";
+    editButton.textContent = "수정";
+    editTd.appendChild(editButton);
+    row.appendChild(editTd);
+
+    const deleteTd = document.createElement("td");
+    deleteTd.className = "px-3 py-3 text-center";
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.dataset.id = item.id;
+    deleteButton.className =
+      "inline-flex h-10 min-w-[72px] items-center justify-center whitespace-nowrap rounded-lg border border-rose-200 bg-rose-100 px-4 text-sm font-bold text-rose-700 hover:bg-rose-200";
+    deleteButton.textContent = "삭제";
+    deleteTd.appendChild(deleteButton);
+    row.appendChild(deleteTd);
+
     recordListEl.appendChild(row);
   }
 
@@ -573,6 +628,9 @@ async function pushRemoteSyncData() {
 }
 
 async function syncNow(options = {}) {
+  if (syncInFlight) return syncInFlight;
+
+  syncInFlight = (async () => {
   const { showProgress = true, showResult = true, pullOnly = false } = options;
 
   if (!isSyncConfigured()) {
@@ -626,6 +684,13 @@ async function syncNow(options = {}) {
   } catch (error) {
     console.error(error);
     setSyncStatus(error instanceof Error ? error.message : "동기화 실패");
+  }
+  })();
+
+  try {
+    return await syncInFlight;
+  } finally {
+    syncInFlight = null;
   }
 }
 
