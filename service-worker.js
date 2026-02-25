@@ -45,6 +45,12 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  const destination = event.request.destination;
+  const isStaticDestination =
+    destination === "script" || destination === "style" || destination === "image" || destination === "font";
+  const isManifestRequest = url.pathname.endsWith("/manifest.json") || url.pathname.endsWith("manifest.json");
+  if (!isStaticDestination && !isManifestRequest) return;
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {

@@ -7,9 +7,12 @@ const SYNC_DIRTY_KEY = "car-sync-dirty";
 const SYNC_LAST_SUCCESS_AT_KEY = "car-sync-last-success-at";
 const TOMBSTONE_RETENTION_DAYS = 30;
 const MIN_SAFE_SYNC_ID_LENGTH = 8;
+const MIN_SAFE_SYNC_KEY_LENGTH = 16;
+const SYNC_REQUEST_TIMEOUT_MS = 12000;
 
 const HARDCODED_SYNC_URL = "https://carrecordbook-default-rtdb.firebaseio.com";
 const HARDCODED_SYNC_ID = "car";
+const HARDCODED_SYNC_KEY = "car-shared-2026-02-25-7f6c2e3b9a41";
 
 const CATEGORY_LABELS = {
   fuel: "유류비",
@@ -55,6 +58,7 @@ let lastSyncStatusMessage = "";
 let pullPollingTimer = null;
 let syncInFlight = null;
 let hasWarnedWeakSyncId = false;
+let hasTriedLegacyPathMigration = false;
 
 function createId() {
   if (window.crypto && typeof window.crypto.randomUUID === "function") {
@@ -144,23 +148,48 @@ function getSyncConfig() {
   return {
     url: normalizeSyncUrl(HARDCODED_SYNC_URL),
     syncId: HARDCODED_SYNC_ID,
+    syncKey: HARDCODED_SYNC_KEY,
   };
 }
 
 function isSyncConfigured() {
   const cfg = getSyncConfig();
-  if (!cfg.url || !cfg.syncId) return false;
+  if (!cfg.url || !cfg.syncId || !cfg.syncKey) return false;
   if (!cfg.url.startsWith("https://")) return false;
   if (cfg.syncId.length < MIN_SAFE_SYNC_ID_LENGTH && !hasWarnedWeakSyncId) {
     hasWarnedWeakSyncId = true;
     console.warn("동기화 ID가 짧습니다. 추측이 어려운 8자 이상 ID를 권장합니다.");
+  }
+  if (cfg.syncKey.length < MIN_SAFE_SYNC_KEY_LENGTH) {
+    setSyncStatus("동기화 키가 너무 짧습니다. 16자 이상으로 설정하세요.");
+    return false;
   }
   return true;
 }
 
 function getRemotePath() {
   const cfg = getSyncConfig();
+  return `${cfg.url}/carRecordSync/${encodeURIComponent(cfg.syncId)}/${encodeURIComponent(cfg.syncKey)}.json`;
+}
+
+function getLegacyRemotePath() {
+  const cfg = getSyncConfig();
   return `${cfg.url}/carRecordSync/${encodeURIComponent(cfg.syncId)}.json`;
+}
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), SYNC_REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`동기화 요청 시간 초과 (${Math.round(SYNC_REQUEST_TIMEOUT_MS / 1000)}초)`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 function openDatabase() {
@@ -670,12 +699,34 @@ function getLatestRecordTime(recordsList) {
 }
 
 async function fetchRemoteSyncData() {
-  const response = await fetch(getRemotePath(), { method: "GET" });
+  const response = await fetchWithTimeout(getRemotePath(), { method: "GET" });
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`동기화 읽기 실패 (${response.status}): ${body.slice(0, 180)}`);
   }
-  return response.json();
+  const remoteData = await response.json();
+  if (remoteData !== null || hasTriedLegacyPathMigration) return remoteData;
+
+  hasTriedLegacyPathMigration = true;
+  try {
+    const legacyResponse = await fetchWithTimeout(getLegacyRemotePath(), { method: "GET" });
+    if (!legacyResponse.ok) return remoteData;
+    const legacyData = await legacyResponse.json();
+    if (legacyData === null) return remoteData;
+
+    const migrateResponse = await fetchWithTimeout(getRemotePath(), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(legacyData),
+    });
+    if (migrateResponse.ok) {
+      setSyncStatus("기존 동기화 데이터 경로를 새 보안 경로로 이전했습니다.");
+      return legacyData;
+    }
+  } catch (error) {
+    console.error("Legacy sync path migration failed:", error);
+  }
+  return remoteData;
 }
 
 async function pushRemoteSyncData() {
@@ -686,7 +737,7 @@ async function pushRemoteSyncData() {
     updatedAt: localUpdatedAt,
     rev: localRev,
   };
-  const response = await fetch(getRemotePath(), {
+  const response = await fetchWithTimeout(getRemotePath(), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -702,7 +753,7 @@ async function syncNow(options = {}) {
   if (syncInFlight) return syncInFlight;
 
   syncInFlight = (async () => {
-  const { showProgress = true, showResult = true, pullOnly = false } = options;
+  const { showProgress = true, showResult = true, pullOnly = false, forcePush = false } = options;
 
   if (!isSyncConfigured()) {
     setSyncStatus("동기화 설정(Firebase DB URL, 동기화 ID)을 먼저 저장하세요.");
@@ -714,6 +765,16 @@ async function syncNow(options = {}) {
   }
 
   try {
+    if (forcePush) {
+      records = pruneOldDeletedRecords(records);
+      await pushRemoteSyncData();
+      markSyncSuccess(nowIso());
+      if (showResult) {
+        setSyncStatus("백업 데이터를 클라우드 기준으로 반영했습니다.");
+      }
+      return;
+    }
+
     const remote = await fetchRemoteSyncData();
     const remoteRecords = remote && Array.isArray(remote.records) ? remote.records.map(normalizeRecord) : [];
 
@@ -838,7 +899,7 @@ async function importBackupFromFile(file) {
     setStorageStatus(`백업 복원 완료: ${records.length}건`);
 
     if (isSyncConfigured()) {
-      await syncNow({ showProgress: true, showResult: true });
+      await syncNow({ showProgress: true, showResult: true, forcePush: true });
     }
   } catch (error) {
     console.error("Failed to import backup:", error);
