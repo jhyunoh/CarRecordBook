@@ -1,5 +1,5 @@
 // Bump this version on each deploy to make cache invalidation explicit and traceable.
-const CACHE_NAME = "car-record-book-v28";
+const CACHE_NAME = "car-record-book-v29";
 const ASSETS = [
   "./",
   "./index.html",
