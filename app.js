@@ -57,6 +57,7 @@ let editingRecordId = null;
 let lastSyncStatusMessage = "";
 let pullPollingTimer = null;
 let syncInFlight = null;
+let hasWarnedWeakSyncId = false;
 let hasTriedLegacyPathMigration = false;
 
 function createId() {
@@ -157,9 +158,9 @@ function isSyncConfigured() {
   const cfg = getSyncConfig();
   if (!cfg.url || !cfg.syncId || !cfg.syncKey) return false;
   if (!cfg.url.startsWith("https://")) return false;
-  if (cfg.syncId.length < MIN_SAFE_SYNC_ID_LENGTH) {
-    setSyncStatus("동기화 ID가 너무 짧습니다. 8자 이상으로 설정하세요.");
-    return false;
+  if (cfg.syncId.length < MIN_SAFE_SYNC_ID_LENGTH && !hasWarnedWeakSyncId) {
+    hasWarnedWeakSyncId = true;
+    console.warn("동기화 ID가 짧습니다. 추측이 어려운 8자 이상 ID를 권장합니다.");
   }
   if (cfg.syncKey.length < MIN_SAFE_SYNC_KEY_LENGTH) {
     setSyncStatus("동기화 키가 너무 짧습니다. 16자 이상으로 설정하세요.");
