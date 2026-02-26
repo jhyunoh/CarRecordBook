@@ -57,7 +57,6 @@ let editingRecordId = null;
 let lastSyncStatusMessage = "";
 let pullPollingTimer = null;
 let syncInFlight = null;
-let hasWarnedWeakSyncId = false;
 let hasTriedLegacyPathMigration = false;
 
 function createId() {
@@ -158,9 +157,9 @@ function isSyncConfigured() {
   const cfg = getSyncConfig();
   if (!cfg.url || !cfg.syncId || !cfg.syncKey) return false;
   if (!cfg.url.startsWith("https://")) return false;
-  if (cfg.syncId.length < MIN_SAFE_SYNC_ID_LENGTH && !hasWarnedWeakSyncId) {
-    hasWarnedWeakSyncId = true;
-    console.warn("동기화 ID가 짧습니다. 추측이 어려운 8자 이상 ID를 권장합니다.");
+  if (cfg.syncId.length < MIN_SAFE_SYNC_ID_LENGTH) {
+    setSyncStatus("동기화 ID가 너무 짧습니다. 8자 이상으로 설정하세요.");
+    return false;
   }
   if (cfg.syncKey.length < MIN_SAFE_SYNC_KEY_LENGTH) {
     setSyncStatus("동기화 키가 너무 짧습니다. 16자 이상으로 설정하세요.");
@@ -378,14 +377,18 @@ function updateStats() {
 function sortRecordsDesc(list) {
   return [...list].sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-    return a.createdAt < b.createdAt ? 1 : -1;
+    if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1;
+    if (a.id !== b.id) return a.id < b.id ? 1 : -1;
+    return 0;
   });
 }
 
 function sortRecordsAsc(list) {
   return [...list].sort((a, b) => {
     if (a.date !== b.date) return a.date > b.date ? 1 : -1;
-    return a.createdAt > b.createdAt ? 1 : -1;
+    if (a.createdAt !== b.createdAt) return a.createdAt > b.createdAt ? 1 : -1;
+    if (a.id !== b.id) return a.id > b.id ? 1 : -1;
+    return 0;
   });
 }
 
@@ -404,8 +407,10 @@ function renderMileageGapChart() {
     const prev = fuelMileageRecords[i - 1];
     const curr = fuelMileageRecords[i];
     const deltaMiles = Number(curr.mileage) - Number(prev.mileage);
-    if (Number.isFinite(deltaMiles) && deltaMiles > 0) {
-      points.push({ date: curr.date, deltaMiles });
+    const fuelVolume = Number(curr.fuelVolume);
+    const mpg = deltaMiles / fuelVolume;
+    if (Number.isFinite(deltaMiles) && deltaMiles > 0 && Number.isFinite(fuelVolume) && fuelVolume > 0 && Number.isFinite(mpg) && mpg > 0) {
+      points.push({ date: curr.date, mpg });
     }
   }
 
@@ -422,7 +427,7 @@ function renderMileageGapChart() {
   const plotW = w - left - right;
   const plotH = h - top - bottom;
 
-  const values = points.map((p) => p.deltaMiles);
+  const values = points.map((p) => p.mpg);
   let min = Math.min(...values);
   let max = Math.max(...values);
   if (min === max) {
@@ -451,7 +456,7 @@ function renderMileageGapChart() {
   ctx.beginPath();
   points.forEach((point, idx) => {
     const x = xAt(idx);
-    const y = yAt(point.deltaMiles);
+    const y = yAt(point.mpg);
     if (idx === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
@@ -460,7 +465,7 @@ function renderMileageGapChart() {
   ctx.fillStyle = "#16324f";
   points.forEach((point, idx) => {
     const x = xAt(idx);
-    const y = yAt(point.deltaMiles);
+    const y = yAt(point.mpg);
     ctx.beginPath();
     ctx.arc(x, y, 3, 0, Math.PI * 2);
     ctx.fill();
@@ -623,13 +628,15 @@ function isFormBeingEdited() {
 }
 
 function normalizeRecord(item) {
+  const fallbackTimestamp = "1970-01-01T00:00:00.000Z";
   const amount = Number(item.amount);
   const mileage = item.mileage === null || item.mileage === undefined || item.mileage === "" ? null : Number(item.mileage);
   const fuelVolume =
     item.fuelVolume === null || item.fuelVolume === undefined || item.fuelVolume === ""
       ? null
       : Number(item.fuelVolume);
-  const updatedAt = item.updatedAt || item.createdAt || nowIso();
+  const createdAt = item.createdAt || item.updatedAt || fallbackTimestamp;
+  const updatedAt = item.updatedAt || item.createdAt || fallbackTimestamp;
   const deletedAt = item.deletedAt || null;
 
   return {
@@ -640,7 +647,7 @@ function normalizeRecord(item) {
     mileage: Number.isFinite(mileage) ? mileage : null,
     fuelVolume: Number.isFinite(fuelVolume) ? fuelVolume : null,
     memo: typeof item.memo === "string" ? item.memo : "",
-    createdAt: item.createdAt || nowIso(),
+    createdAt,
     updatedAt,
     deletedAt,
   };
